@@ -16,7 +16,7 @@ jobs:
   check-linked-issue:
     runs-on: ubuntu-latest
     steps:
-      - name: Validate linked issue reference
+      - name: Check linked issue
         shell: bash
         run: |
           python - <<'PY'
@@ -30,31 +30,26 @@ jobs:
           body = pr.get('body') or ''
           author = ((pr.get('user') or {}).get('login') or '').strip()
           labels = {label.get('name') for label in pr.get('labels', []) if label.get('name')}
-
-          bypass_label = 'no-linked-issue-required'
-          bot_authors = {'dependabot[bot]', 'renovate[bot]', 'github-actions[bot]'}
-          patterns = (
-              re.compile(r'(?i)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|ref(?:erence)?s?|see)\s*:?\s+(?:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#\d+\b'),
-              re.compile(r'(?i)https://github\.com/[^/\s]+/[^/\s]+/issues/\d+\b'),
-              re.compile(r'(?<![/\w])#\d+\b'),
-          )
           text = '\n'.join(part for part in (title, body) if part)
+          bot_authors = {'dependabot[bot]', 'renovate[bot]', 'github-actions[bot]'}
 
           if author in bot_authors:
               print(f"Skipping linked-issue enforcement for bot author '{author}'.")
               sys.exit(0)
 
-          if bypass_label in labels:
-              print(f"Bypass label '{bypass_label}' is present.")
+          if 'no-linked-issue-required' in labels:
+              print('Bypass label present.')
               sys.exit(0)
 
-          if any(pattern.search(text) for pattern in patterns):
-              print('Linked issue reference found.')
+          has_issue_number = re.search(r'(?<![/\w])#\d+\b', text)
+          has_issue_url = re.search(r'https://github\.com/[^/\s]+/[^/\s]+/issues/\d+\b', text)
+
+          if has_issue_number or has_issue_url:
+              print('Issue reference found.')
               sys.exit(0)
 
           print(
-              "Missing linked issue reference. Add an issue link such as 'Closes #123' to the PR title or body, "
-              f"or apply the '{bypass_label}' label.",
+              "Missing linked issue reference. Add '#123', a GitHub issue URL, or the 'no-linked-issue-required' label.",
               file=sys.stderr,
           )
           sys.exit(1)
